@@ -11,6 +11,9 @@ library(stringr)
 # remotes::install_github("r-lib/gargle")
 library(googlesheets4)
 
+# Get sheets
+ss <- sheets_get("https://docs.google.com/spreadsheets/d/1c0WgD9DcF_ib5g6V98jj984QH7r3jTWqwp5fwHLtw5g/")
+prev_date <- max(as_date(sheets_sheet_names(ss)))
 
 #' Twitter users to ignore
 ignore_users <- c("CRANberriesFeed", "ropensci", "tidyversetweets",
@@ -18,9 +21,6 @@ ignore_users <- c("CRANberriesFeed", "ropensci", "tidyversetweets",
 
 #' rOpenSci packages to ignore
 ignore_packages <- c("plotly")
-
-#' Earliest date to look from (one week)
-start_date <- Sys.Date() - days(7)
 
 #' Get rOpenSci packages
 pkgs <- "https://ropensci.github.io/roregistry/registry.json" %>%
@@ -59,17 +59,17 @@ tweets_relevant <- tweets_raw %>%
 #' Get what we need
 tweets_subset <- tweets_relevant %>%
   unnest(cols = c(name)) %>%
-  filter(created_at >= start_date,       # Must be on or after start date
+  filter(created_at >= prev_date,       # Must be on or after start date
          !tolower(screen_name) %in% tolower(ignore_users)) %>% # Must not contain ignored users
   left_join(select(pkgs, name, maintainer), by = "name")
 
 #' # Format tweets
 tweets_final <- tweets_subset %>%
   mutate(ropensci_author = stringi::stri_trans_general(maintainer, "Latin-ASCII"),
-         ropensci_author = paste0("=HYPERLINK(\"https://ropensci.org/author/",
+         ropensci_author = paste0("https://ropensci.org/author/",
                                   str_replace_all(ropensci_author,
-                                                  c(" " = "-",
-                                                    "\\." = "")), "\", \"",
+                                                  c(" " = "-", "\\." = ""))),
+         ropensci_author = paste0("=HYPERLINK(\"", ropensci_author, "\", \"",
                                   maintainer, "\")"),
          text = str_wrap(text, width = 40),
          original_tweet = paste0("=HYPERLINK(\"", status_url,
@@ -85,19 +85,19 @@ tweets_final <- tweets_subset %>%
                                       ropensci_author[1]),
             draft_tweet = paste0("[use case] Example of using ", names, ", by @", screen_name[1], "\n\n",
                                  "FORUM_URL\n\n",
-                                 "with XXX and XXX\n\n",
-                                 names, " by @GET_TWITTER_HANDLE(S)\n\n",
+                                 "with CODE and GIF EXAMPLES\n\n",
+                                 names, " by @GET_TWITTER_USER\n\n",
                                  "#rstats #", paste0(name, collapse = " #"), "\n\n",
-                                 "GIF? MEDIA?")) %>%
+                                 "[GIF? MEDIA?]")) %>%
   ungroup() %>%
   mutate_at(vars(ropensci_author, twitter_user, original_tweet),
             sheets_formula) %>%
   arrange(names, created_at) %>%
-  select(names, date, twitter_user, text, original_tweet,
-         ropensci_author, draft_tweet)
+  mutate(`use?` = "", media = "") %>%
+  select(`use?`, names, date, twitter_user, text, original_tweet,
+         ropensci_author, draft_tweet, media)
 
 
-ss <- sheets_get("https://docs.google.com/spreadsheets/d/1c0WgD9DcF_ib5g6V98jj984QH7r3jTWqwp5fwHLtw5g/")
 sheets_write(tweets_final, ss = ss, sheet = as.character(Sys.Date()))
 
 
