@@ -37,7 +37,7 @@ pkgs <- "https://ropensci.github.io/roregistry/registry.json" %>%
 #'   Seem to run into rate limits if try to put package names directly in search
 #' - Consider adding 'lang = "en"' to `search_tweets()` (but this isnt' perfect)
 
-tweets_raw <- search_tweets(q = "#rstats OR ropensci",
+tweets_raw <- search_tweets(q = "#rstats OR ropensci OR CRAN",
                             n = 18000,
                             include_rts = FALSE)
 
