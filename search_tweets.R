@@ -13,6 +13,18 @@ library(googlesheets4)
 
 # Get sheets
 ss <- sheets_get("https://docs.google.com/spreadsheets/d/1c0WgD9DcF_ib5g6V98jj984QH7r3jTWqwp5fwHLtw5g/")
+sheets <- sheets_sheet_names(ss)
+
+# Remove starting Sheet1
+if(any(sheets == "Sheet1")) sheets_sheet_delete(ss, "Sheet1")
+
+# Get dates from previous sheets or from 7 days ago
+if(any(sheets != "Sheet1")) {
+  prev_date <- read_sheet(ss, as.character(max(as_date(sheets))))
+} else {
+  prev_date <- Sys.Date() - days(7)
+}
+
 prev_date <- max(as_date(sheets_sheet_names(ss)))
 
 #' Twitter users to ignore
@@ -20,14 +32,13 @@ ignore_users <- c("CRANberriesFeed", "ropensci", "tidyversetweets",
                   "roknowtifier")
 
 #' rOpenSci packages to ignore
-ignore_packages <- c("plotly")
+ignore_packages <- c("plotly", "gender")
 
 #' Get rOpenSci packages
 pkgs <- "https://ropensci.github.io/roregistry/registry.json" %>%
   jsonlite::fromJSON(.) %>%
   .[["packages"]] %>%
-  filter(status == "active",
-         !name %in% ignore_packages)
+  filter(!name %in% ignore_packages)
 
 #' # Tweets
 #' Get tweets (will authorize rtweet to your twitter account)
