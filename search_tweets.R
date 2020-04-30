@@ -29,10 +29,10 @@ prev_date <- max(as_date(sheets_sheet_names(ss)))
 
 #' Twitter users to ignore
 ignore_users <- c("CRANberriesFeed", "ropensci", "tidyversetweets",
-                  "roknowtifier")
+                  "roknowtifier", "g_rpkg")
 
 #' rOpenSci packages to ignore
-ignore_packages <- c("plotly", "gender")
+ignore_packages <- c("plotly", "gender", "changes")
 
 #' Get rOpenSci packages
 pkgs <- "https://ropensci.github.io/roregistry/registry.json" %>%

@@ -155,9 +155,11 @@ featured_formatted <- featured %>%
   mutate(`Tweeted?` = "",
          media = "")
 
-# Remove sites already in previous sheets
+# Remove dates already in previous sheets
 if(!is.null(prev_sites)) {
-  featured_relevant <- anti_join(featured_formatted, prev_sites, by = c("pages", "pkgs"))
+  featured_relevant <- prev_sites %>%
+    mutate(date = as_date(date)) %>%
+    anti_join(featured_formatted, ., by = c("type", "date", "mentions_pkgs"))
 } else {
   featured_relevant <- featured_formatted
 }
