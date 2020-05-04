@@ -12,18 +12,12 @@ library(lubridate)
 library(googlesheets4)
 
 #' rOpenSci packages to ignore
-ignore_packages <- c("plotly", "gender")
-
+ignore_packages <- c("plotly", "gender", "changes")
 
 # Get sheets
-ss <- sheets_get("https://docs.google.com/spreadsheets/d/1gVt7SwbP1tSxcPtiYkFnUX_2yA_Zmy0TW5rT4_qcz5w/")
-sheets <- sheets_sheet_names(ss)
-if(any(sheets == "Sheet1")) sheets_sheet_delete(ss, "Sheet1")
-if(any(sheets != "Sheet1")) {
-  prev_sites <- read_sheet(ss, as.character(max(as_date(sheets))))
-} else {
-  prev_sites <- NULL
-}
+ss <- gs4_get("https://docs.google.com/spreadsheets/d/1gVt7SwbP1tSxcPtiYkFnUX_2yA_Zmy0TW5rT4_qcz5w/")
+prev_sites <- read_sheet(ss, 1) %>%
+  mutate(date = as_date(date))
 
 
 #' Get rOpenSci packages
@@ -149,21 +143,21 @@ featured_formatted <- featured %>%
                                                   c(" " = "-", "\\." = ""))),
          ropensci_author = paste0("=HYPERLINK(\"", ropensci_author, "\", \"",
                                   maintainer, "\")")) %>%
-  mutate_at(vars(ropensci_author, pages, docs_site), sheets_formula) %>%
-  select(type, pages, date, mentions_pkgs, highlighted, draft_tweet, docs_site,
-         ropensci_author) %>%
-  mutate(`Tweeted?` = "",
-         media = "")
+  mutate_at(vars(ropensci_author, pages, docs_site), gs4_formula) %>%
+  mutate(`Use?` = "",
+         media = "") %>%
+  select(`Use?`, type, pages, date, mentions_pkgs, highlighted, docs_site,
+         ropensci_author, draft_tweet, media) %>%
+  arrange(date, type, mentions_pkgs)
 
 # Remove dates already in previous sheets
-if(!is.null(prev_sites)) {
-  featured_relevant <- prev_sites %>%
-    mutate(date = as_date(date)) %>%
-    anti_join(featured_formatted, ., by = c("type", "date", "mentions_pkgs"))
+if(nrow(prev_sites) > 0) {
+  featured_relevant <- anti_join(featured_formatted, prev_sites,
+                                 by = c("type", "date", "mentions_pkgs"))
+  if(nrow(featured_relevant) > 1) {
+    sheets_append(featured_relevant, ss = ss, sheet = 1)
+  } else message("No new features")
 } else {
-  featured_relevant <- featured_formatted
-}
-
-if(nrow(featured_relevant) > 0) {
-  sheets_write(featured_relevant, ss = ss, sheet = as.character(Sys.Date()))
+  # If no previous features, start a new sheet
+  sheets_write(featured_relevant, ss = ss, sheet = 1)
 }
