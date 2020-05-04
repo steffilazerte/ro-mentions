@@ -32,7 +32,7 @@ ignore_users <- c("CRANberriesFeed", "ropensci", "tidyversetweets",
                   "roknowtifier", "g_rpkg", "rweekly_live", "rweekly_org")
 
 #' rOpenSci packages to ignore
-ignore_packages <- c("plotly", "gender", "changes")
+ignore_packages <- c("plotly", "gender", "changes", "scientist")
 
 #' Get rOpenSci packages
 pkgs <- "https://ropensci.github.io/roregistry/registry.json" %>%
