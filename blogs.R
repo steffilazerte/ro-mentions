@@ -85,9 +85,9 @@ if(nrow(prev_posts) > 0) {
   posts_relevant <- anti_join(posts_relevant,
                               prev_posts,
                               by = c("post_date", "post_title"))
-  if(nrow(posts_relevant) > 1) sheets_append(posts_relevant, ss = ss, sheet = 1)
+  if(nrow(posts_relevant) > 1) sheet_append(posts_relevant, ss = ss, sheet = 1)
 } else {
   # If no previous posts, start a new sheet
-  sheets_write(posts_relevant, ss = ss, sheet = 1)
+  sheet_write(posts_relevant, ss = ss, sheet = 1)
 }
 

@@ -155,9 +155,9 @@ if(nrow(prev_sites) > 0) {
   featured_relevant <- anti_join(featured_formatted, prev_sites,
                                  by = c("type", "date", "mentions_pkgs"))
   if(nrow(featured_relevant) > 1) {
-    sheets_append(featured_relevant, ss = ss, sheet = 1)
+    sheet_append(featured_relevant, ss = ss, sheet = 1)
   } else message("No new features")
 } else {
   # If no previous features, start a new sheet
-  sheets_write(featured_relevant, ss = ss, sheet = 1)
+  sheet_write(featured_relevant, ss = ss, sheet = 1)
 }

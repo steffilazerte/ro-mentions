@@ -12,11 +12,11 @@ library(stringr)
 library(googlesheets4)
 
 # Get sheets
-ss <- sheets_get("https://docs.google.com/spreadsheets/d/1c0WgD9DcF_ib5g6V98jj984QH7r3jTWqwp5fwHLtw5g/")
-sheets <- sheets_sheet_names(ss)
+ss <- gs4_get("https://docs.google.com/spreadsheets/d/1c0WgD9DcF_ib5g6V98jj984QH7r3jTWqwp5fwHLtw5g/")
+sheets <- sheet_names(ss)
 
 # Remove starting Sheet1
-if(any(sheets == "Sheet1")) sheets_sheet_delete(ss, "Sheet1")
+if(any(sheets == "Sheet1")) sheet_delete(ss, "Sheet1")
 
 # Get dates from previous sheets or from 7 days ago
 if(any(sheets != "Sheet1")) {
@@ -25,7 +25,7 @@ if(any(sheets != "Sheet1")) {
   prev_date <- Sys.Date() - days(7)
 }
 
-prev_date <- max(as_date(sheets_sheet_names(ss)))
+prev_date <- max(as_date(sheet_names(ss)))
 
 #' Twitter users to ignore
 ignore_users <- c("CRANberriesFeed", "ropensci", "tidyversetweets",
@@ -102,14 +102,14 @@ tweets_final <- tweets_subset %>%
                                  "[GIF? MEDIA?]")) %>%
   ungroup() %>%
   mutate_at(vars(ropensci_author, twitter_user, original_tweet),
-            sheets_formula) %>%
+           gs4_formula) %>%
   arrange(names, created_at) %>%
   mutate(`use?` = "", media = "") %>%
   select(`use?`, names, date, twitter_user, text, original_tweet,
          ropensci_author, draft_tweet, media)
 
 
-sheets_write(tweets_final, ss = ss, sheet = as.character(Sys.Date()))
+sheet_write(tweets_final, ss = ss, sheet = as.character(Sys.Date()))
 
 
 
