@@ -5,6 +5,7 @@ library(httr)
 library(rvest)
 library(stringr)
 library(lubridate)
+library(glue)
 
 #' Need some dev packages:
 # remotes::install_github("tidyverse/googlesheets4/")
@@ -19,6 +20,22 @@ ss <- gs4_get("https://docs.google.com/spreadsheets/d/1gVt7SwbP1tSxcPtiYkFnUX_2y
 prev_sites <- read_sheet(ss, 1) %>%
   mutate(date = as_date(date))
 
+# Get filter dates
+rviews_date <- as_date("2020-01-01")  # default
+rweekly_date <- as_date("2020-01-01") # default
+
+# Get last date extracted
+if("R Views Top 40" %in% prev_sites$type) {
+  rviews_date <- filter(prev_sites, type == "R Views Top 40") %>%
+    pull(date) %>%
+    max(na.rm = TRUE)
+}
+
+if("R Weekly" %in% prev_sites$type) {
+  rweekly_date <- filter(prev_sites, type == "R Weekly") %>%
+    pull(date) %>%
+    max(na.rm = TRUE)
+}
 
 #' Get rOpenSci packages
 pkgs <- "https://ropensci.github.io/roregistry/registry.json" %>%
@@ -26,7 +43,7 @@ pkgs <- "https://ropensci.github.io/roregistry/registry.json" %>%
   .[["packages"]] %>%
   filter(!name %in% ignore_packages)
 
-pkgs_search <- paste0("\\b", paste0(pkgs$name,   collapse = "\\b|\\b"), "\\b")
+pkgs_search <- glue("\\b", glue_collapse(pkgs$name, sep = "\\b|\\b"), "\\b")
 
 
 # Extract R Views Top 40
@@ -50,7 +67,7 @@ rviews <- tibble(type = "R Views Top 40",
                         unique())) %>%
   unnest(c(pages, date)) %>%
   filter(str_detect(pages, key),
-         date >= as_date("2019-12-31")) %>%
+         date >= rviews_date) %>%
   mutate(mentions = map(pages, ~html_session(.) %>%
                           html_nodes(css = "a") %>%
                           html_text())) %>%
@@ -63,6 +80,7 @@ rweekly <- tibble(type = "R Weekly",
                  class = "li>p",
                  key = "/[0-9]{4}-[0-9]{2}",
                  date_str = "^[0-9]{2} [a-zA-Z]+ [0-9]{4}") %>%
+  # Get important parts of the page
   mutate(pages = map2(site, class,
                       ~read_html(.x) %>%
                         html_nodes(css = .y)),
@@ -76,18 +94,21 @@ rweekly <- tibble(type = "R Weekly",
                         paste0(.y, .) %>%
                         unique())) %>%
   unnest(c(pages, date)) %>%
+  # Get relevant dates
   filter(str_detect(pages, key),
-         date >= as_date("2020-01-01")) %>%
+         date >= rweekly_date) %>%
   mutate(highlights = map(pages,
                           ~html_session(.) %>%
                             html_nodes(css = "#highlight+ul") %>%
                             html_nodes(css = "a") %>%
                             html_text()),
          mentions = map(pages, ~html_session(.) %>%
-                          html_nodes(css = "a") %>%
+                          # Remove the "aside" Or "Related posts" which give false positives
+                          html_nodes(xpath='//*[not(ancestor::aside or name()="aside")]/a') %>%
                           html_text())) %>%
   select(-site, -base_path, -class, -key, -date_str)
 
+# Combine and Summarize mentions and highlights
 featured <- bind_rows(rviews, rweekly) %>%
   mutate(mentions_pkgs = map(mentions, ~str_extract(., pkgs_search)),
          mentions_pkgs = map(mentions_pkgs, ~unique(.[!is.na(.)])),
@@ -103,46 +124,43 @@ featured <- bind_rows(rviews, rweekly) %>%
 # Format for site
 featured_formatted <- featured %>%
   left_join(select(pkgs, name, maintainer), by = c("mentions_pkgs" = "name")) %>%
-  mutate(docs_site = paste0("https://docs.ropensci.org/", mentions_pkgs)) %>%
+  mutate(docs_site = glue("https://docs.ropensci.org/{mentions_pkgs}")) %>%
   group_by(type, pages, date) %>%
-  mutate(draft_tweet_head = case_when(
+  mutate(draft_tweet_head = as.character(case_when(
     type == "R Views Top 40" ~
-      paste0(if_else(mentions_n[1] == 1, "", paste0(mentions_n[1], " ")),
-             "rOpenSci peer reviewed package", if_else(mentions_n[1] > 1, "s", ""), " in ",
-             month(date[1], label = TRUE, abbr = FALSE), " ", year(date[1]), " Top 40 New Packages by @RStudioJoe\n\n"),
+      glue(if_else(mentions_n[1] == 1, "", "{mentions_n[1]} "),
+           "rOpenSci peer reviewed package", if_else(mentions_n[1] > 1, "s", ""), " in ",
+           month(date[1], label = TRUE, abbr = FALSE), " ", year(date[1]),
+           " Top 40 New Packages by @RStudioJoe"),
     type == "R Weekly" & highlighted ~
-      paste0(if_else(highlights_n[1] == 1, "", paste0(highlights_n[1], " ")),
-             "rOpenSci peer reviewed package", if_else(highlights_n[1] > 1, "s", ""),
-             " in @rweekly_org highlights!\n\n"),
-    TRUE ~ ""),
-    draft_tweet_footer = case_when(
-      type == "R Views Top 40" ~ paste0("RViews: ", pages[1], "\n\n#rstats"),
-      type == "R Weekly" & highlighted ~ paste0(pages[1], "\n\n#rstats"),
-      TRUE ~ ""),
-    draft_tweet_body = case_when(
+      glue(if_else(highlights_n[1] == 1, "", "{highlights_n[1]} "),
+           "rOpenSci peer reviewed package", if_else(highlights_n[1] > 1, "s", ""),
+           " in @rweekly_org highlights!"),
+    TRUE ~ "")),
+    draft_tweet_footer = as.character(case_when(
+      type == "R Views Top 40" ~ glue("RViews: {pages[1]}\n\n#rstats"),
+      type == "R Weekly" & highlighted ~ glue("{pages[1]}\n\n#rstats"),
+      TRUE ~ "")),
+    draft_tweet_body = as.character(case_when(
       type == "R Views Top 40" ~
-        paste0(paste0("#", mentions_pkgs, " do THIS COOL THING\n",
-                      "by @THISMAINTAINER \n",
-                       docs_site[1], "\n\n"),
-               collapse = ""),
+        glue_collapse(glue("#{mentions_pkgs} do THIS COOL THING\n",
+                           "by @THISMAINTAINER \n",
+                           "{docs_site[1]}")),
       type == "R Weekly" & highlighted ~
-        paste0(paste0("#", unique(highlights_pkgs), " do THIS COOL THING\n",
-                      "by @THISMAINTAINER \n",
-                      docs_site[1], "\n\n"),
-               collapse = ""),
-      TRUE ~ "")) %>%
+        glue_collapse(glue("#{unique(highlights_pkgs)} do THIS COOL THING\n",
+                           "by @THISMAINTAINER \n",
+                           "{docs_site[1]}")),
+      TRUE ~ ""))) %>%
   ungroup() %>%
-  mutate(draft_tweet = paste0(draft_tweet_head,
-                              draft_tweet_body,
-                              draft_tweet_footer),
-         pages = paste0("=HYPERLINK(\"", pages, "\", \"Original Post\")"),
-         docs_site = paste0("=HYPERLINK(\"", docs_site, "\", \"Docs Link Work?\")"),
+  mutate(draft_tweet = glue("{draft_tweet_head}\n\n",
+                            "{draft_tweet_body}\n\n",
+                            "{draft_tweet_footer}"),
+         pages = glue("=HYPERLINK(\"{pages}\", \"Original Post\")"),
+         docs_site = glue("=HYPERLINK(\"{docs_site}\", \"Docs Link Work?\")"),
          ropensci_author = stringi::stri_trans_general(maintainer, "Latin-ASCII"),
-         ropensci_author = paste0("https://ropensci.org/author/",
-                                  str_replace_all(ropensci_author,
-                                                  c(" " = "-", "\\." = ""))),
-         ropensci_author = paste0("=HYPERLINK(\"", ropensci_author, "\", \"",
-                                  maintainer, "\")")) %>%
+         ropensci_author = str_replace_all(ropensci_author, c(" " = "-", "\\." = "")),
+         ropensci_author = glue("https://ropensci.org/author/{ropensci_author}"),
+         ropensci_author = glue("=HYPERLINK(\"{ropensci_author}\", \"{maintainer}\")")) %>%
   mutate_at(vars(ropensci_author, pages, docs_site), gs4_formula) %>%
   mutate(`Use?` = "",
          media = "") %>%
