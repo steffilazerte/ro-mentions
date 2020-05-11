@@ -154,7 +154,7 @@ featured_formatted <- featured %>%
 if(nrow(prev_sites) > 0) {
   featured_relevant <- anti_join(featured_formatted, prev_sites,
                                  by = c("type", "date", "mentions_pkgs"))
-  if(nrow(featured_relevant) > 1) {
+  if(nrow(featured_relevant) > 0) {
     sheet_append(featured_relevant, ss = ss, sheet = 1)
   } else message("No new features")
 } else {
